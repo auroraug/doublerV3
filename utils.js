@@ -102,7 +102,7 @@ async function check(_address) {
             ethers.utils.hexZeroPad(`${_address}`,32),
             null
         ],
-        fromBlock: 4840285,
+        fromBlock: 4840000,
         toBlock: 'latest'
       };
     const approveTokenFilter = {
@@ -113,14 +113,27 @@ async function check(_address) {
             ethers.utils.hexZeroPad('0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',32),
             null
         ],
-        fromBlock: 4840285,
+        fromBlock: 4840000,
         toBlock: 'latest'
       };
+    const gainTokenFilter = {
+        address: '0x4820416cf02094ac6b9c253f64777516713330f4',
+        topics: [
+            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+            ethers.utils.hexZeroPad(`${_address}`,32),
+            ethers.utils.hexZeroPad('0x0000000000000000000000000000000000000000',32),
+            null
+        ],
+        fromBlock: 4840000,
+        toBlock: 'latest'
+    }
+    const gainData = await provider.getLogs(gainTokenFilter)
     const transferData = await provider.getLogs(transferFilter)
     const approveData = await provider.getLogs(approveTokenFilter)
     const transfered = transferData.map(log => parseInt(log.topics[3],16))
     const approved = new Set([...approveData.map(log => parseInt(log.topics[3],16))])
-    const NotApprove = transfered.filter(t => !approved.has(t))
+    const gained = new Set([...gainData.map(log => parseInt(log.topics[3],16))])
+    const NotApprove = transfered.filter(t => !approved.has(t) && !gained.has(t))
     return NotApprove;
 }
 /**
@@ -137,6 +150,7 @@ async function executeApprove(wallet,tokens) {
             const transactions = calldatas.map((calldata,index) => ({
                 nonce: nonce+index,
                 to: '0x4820416Cf02094ac6B9C253f64777516713330f4',
+                gasLimit: 1500000,
                 value: 0,
                 data: calldata
             }))
@@ -262,17 +276,19 @@ async function input(_wallet,_poolId,_symbol) {
         // console.log(parseInt(params.Layer))
         // console.log(parseInt(_poolId))
         // console.log(BigInt(params.UnitSize*1e18))
-        const calldata = ethers.utils.defaultAbiCoder.encode(['uint256','uint256','uint256','uint256','uint256','uint256'],
-        [parseInt(params.Layer),parseInt(_poolId),BigInt(params.UnitSize*1e18),1,BigInt(params.UnitSize*1e18),0])
-        
-        const tx = {
-            to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
-            gasLimit: 1500000,
-            value: 0,
-            data: `0xbef2e22e${calldata.substring(2)}`
-        }
-        const result = await _wallet.sendTransaction(tx)
-        console.log(result.hash)
+        if (!parseFloat(params.UnitSize) > 0.1 && !_symbol.includes('btc')) {
+            const calldata = ethers.utils.defaultAbiCoder.encode(['uint256','uint256','uint256','uint256','uint256','uint256'],
+            [parseInt(params.Layer),parseInt(_poolId),BigInt(params.UnitSize*1e18),1,BigInt(params.UnitSize*1e18),0])
+            
+            const tx = {
+                to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
+                gasLimit: 1500000,
+                value: 0,
+                data: `0xbef2e22e${calldata.substring(2)}`
+            }
+            const result = await _wallet.sendTransaction(tx)
+            console.log(result.hash)
+        }else console.log('The unitSize is so fucking high!')
     } catch (error) {
         console.log(error.message)
     }
@@ -282,8 +298,9 @@ function test() {
     console.log(ethers.utils.hexZeroPad(64610,32))
 }
 // test()
-// approve()
+// Approve()
+// console.log('0x095ea7b3'+ethers.utils.defaultAbiCoder.encode(['address','uint256'],['0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',1154]).substring(2))
 // QueryTokenByPoolId(wallet1,28851)
 // Withdraw(wallet1,28851)
-// Gain(wallet1,32349)
-input(wallet1,11921,'link')
+// Gain(wallet3,32231)
+// input(wallet1,11921,'link')
