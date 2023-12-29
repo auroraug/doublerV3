@@ -27,13 +27,14 @@ async function Withdraw(wallet,poolId) {
 /**
  * Gain from poolId with status end
  * @param {ethers.Wallet} wallet 
- * @param {Number} poolId 
- * @example Gain(wallet1, 11111)
+ * @param {Number[]} poolIds 
+ * @example Gain(wallet1, [11111,22222])
  */
-async function Gain(wallet,poolId) {
+async function Gain(wallet,poolIds) {
     try {
-        const tokenIds = await QueryTokenByPoolId(wallet,poolId)
-        const tx = await Promise.all(tokenIds.map(token => _gain(wallet,token)))
+        const [tokenIds] = await Promise.all(poolIds.map(poolid => QueryTokenByPoolId(wallet,poolid)))
+        // console.log(tokenIds)
+        const tx = await _gain(wallet,tokenIds)
         console.log(tx)
     } catch (error) {
         console.log(error.message)
@@ -187,20 +188,26 @@ async function _withdraw(wallet,token) {
 /**
  * 
  * @param {ethers.Wallet} wallet 钱包实例
- * @param {Number} token tokenId
- * @returns {String} tx.hash
+ * @param {Number[]} tokens tokenIds
+ * @returns {Promise<String[]>} tx.hash
  */
-async function _gain(wallet,token) {
+async function _gain(wallet,tokens) {
     try {
-        const calldata = '0x022e6df6'+ ethers.utils.defaultAbiCoder.encode(['uint256'],[token]).substring(2)
-        const tx = {
-            to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
-            gasLimit: 1500000,
-            value: 0,
-            data: calldata
+        const nonce = await wallet.getTransactionCount()
+        let hash = []
+        for (let index = 0; index < tokens.length; index++) {
+            const calldata = '0x022e6df6'+ ethers.utils.defaultAbiCoder.encode(['uint256'],[tokens[index]]).substring(2)
+            const tx = {
+                nonce: nonce+index,
+                to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
+                gasLimit: 1500000,
+                value: 0,
+                data: calldata
+            }
+            const res = await wallet.sendTransaction(tx)
+            hash.push(res.hash)
         }
-        const res = await wallet.sendTransaction(tx)
-        return res.hash
+        return hash;
     } catch (error) {
         console.log(error.message)
     }
@@ -263,7 +270,54 @@ function queryTokenAddr(_symbol) {
 }
 
 /**
- * 添加池子
+ * 查询所有钱包在doubler V3中测试币的余额
+ */
+async function balanceOf() {
+    const b1 = await _checkBalance(wallet1)
+    const b2 = await _checkBalance(wallet2)
+    const b3 = await _checkBalance(wallet3)
+
+    console.log(`${wallet1.address.slice(38,42)}`,b1)
+    console.log(`${wallet2.address.slice(38,42)}`,b2)
+    console.log(`${wallet3.address.slice(38,42)}`,b3)
+}
+
+/**
+ * 查询该wallet在doubler V3中所有测试token余额
+ * @param {ethers.Wallet} _wallet 钱包实例
+ * @returns 
+ */
+async function _checkBalance(_wallet) {
+    try {
+        const funcSig = ethers.utils.id('checkBalance(address)').slice(0,10)
+        const calldata = ethers.utils.defaultAbiCoder.encode(['address'],[_wallet.address])
+        const payload = await provider.call({
+            to: '0x309e028180b6e2d2DFdFE98d831f00F798522052',
+            data: funcSig+calldata.substring(2)
+        })
+        // console.log(payload)
+        const decodedResult = ethers.utils.defaultAbiCoder.decode(["uint256","uint256","uint256","uint256","uint256","uint256","uint256","uint256","uint256"],payload).slice(2)
+        const balanceOf = {
+            btc: 0,
+            eth: 0,
+            snx: 0,
+            link: 0,
+            doge: 0,
+            bnb: 0,
+            okb: 0
+        }
+        const symbol = ['btc','eth','snx','link','doge','bnb','okb']
+        for (let index = 0; index < decodedResult.length; index++) {
+            balanceOf[symbol[index]] = parseFloat(decodedResult[index]/10 ** 18)
+        }
+        return balanceOf;
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+/**
+ * 添加池子 博币本位增加
  * @param {ethers.Wallet} _wallet 
  * @param {Number} _poolId 
  * @param {String} _symbol
@@ -294,13 +348,49 @@ async function input(_wallet,_poolId,_symbol) {
     }
 }
 
-function test() {
-    console.log(ethers.utils.hexZeroPad(64610,32))
+/**
+ * all in添加池子 倍数 x2
+ * @param {ethers.Wallet} _wallet 
+ * @param {Number} _poolId 
+ * @param {String} _symbol
+ * @example AllIn(wallet1, 28299, 'okb') 
+ */
+async function AllIn(_wallet,_poolId,_symbol) {
+    const contractAddr = queryTokenAddr(_symbol)
+    try {
+        const params = await fetch(_poolId,contractAddr)
+        const balance = (await _checkBalance(_wallet))[_symbol]
+        console.log(parseFloat(params.UnitSize),balance)
+        // console.log(parseInt(params.Layer))
+        // console.log(parseInt(_poolId))
+        // console.log(BigInt(params.UnitSize*1e18))
+        if (parseFloat(params.UnitSize) < balance) {
+            console.log(parseFloat(parseInt(balance/parseFloat(params.UnitSize)))*parseFloat(params.UnitSize))
+            const amount = parseFloat(parseInt(balance/parseFloat(params.UnitSize)))*parseFloat(params.UnitSize)*1e18
+            // const calldata = ethers.utils.defaultAbiCoder.encode(['uint256','uint256','uint256','uint256','uint256','uint256'],
+            // [parseInt(params.Layer),parseInt(_poolId),BigInt(amount*1e18),2,BigInt(2*amount*1e18),0])
+            const calldata1 = `${ethers.utils.hexZeroPad(parseInt(params.Layer),32).substring(2)}`+
+                `${ethers.utils.hexZeroPad(parseInt(_poolId),32).substring(2)}`+
+                `${ethers.utils.hexZeroPad(`0x${new BigNumber(amount).toString(16)}`,32).substring(2)}`+
+                `${ethers.utils.hexZeroPad(2,32).substring(2)}`+
+                `${ethers.utils.hexZeroPad(`0x${new BigNumber(2*amount).toString(16)}`,32).substring(2)}`+
+                `${ethers.utils.hexZeroPad(0,32).substring(2)}`
+            // console.log(calldata1)
+            const tx = {
+                to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
+                gasLimit: 1500000,
+                value: 0,
+                data: `0xbef2e22e${calldata1}`
+            }
+            const result = await _wallet.sendTransaction(tx)
+            console.log(result.hash)
+        }else console.log('The unitSize is so fucking high!')
+    } catch (error) {
+        console.log(error.message)
+    }
 }
-// test()
-// Approve()
-// console.log('0x095ea7b3'+ethers.utils.defaultAbiCoder.encode(['address','uint256'],['0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',1154]).substring(2))
-// QueryTokenByPoolId(wallet1,28851)
-// Withdraw(wallet1,28851)
-// Gain(wallet3,32231)
-// input(wallet1,11921,'link')
+
+function test() {
+
+}
+balanceOf()
