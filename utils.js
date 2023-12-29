@@ -1,4 +1,5 @@
 const { ethers } = require("hardhat");
+const BigNumber = require('bignumber.js');
 const {fetch} = require('./spider');
 require("dotenv").config();
 
