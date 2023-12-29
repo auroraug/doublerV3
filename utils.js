@@ -349,6 +349,29 @@ async function input(_wallet,_poolId,_symbol) {
 }
 
 /**
+ * End池子
+ * @param {ethers.Wallet} _wallet 
+ * @param {Number[]} _poolIds 
+ */
+async function end(_wallet,_poolIds) {
+    try {
+        const nonce = await _wallet.getTransactionCount()
+        const transactions = _poolIds.map((poolid,index) => ({
+            nonce: nonce+index,
+            to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
+            value: 0,
+            gasLimit: 1500000,
+            data: '0xc964ee9f'+ethers.utils.defaultAbiCoder.encode(['uint256'],[poolid]).substring(2)
+        }))
+        const results = await Promise.all(transactions.map(tx => _wallet.sendTransaction(tx)))
+        const hash = results.map(re => re.hash)
+        console.log(hash)
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+/**
  * all in添加池子 倍数 x2
  * @param {ethers.Wallet} _wallet 
  * @param {Number} _poolId 
