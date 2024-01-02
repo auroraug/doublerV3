@@ -33,9 +33,10 @@ async function Withdraw(wallet,poolId) {
  */
 async function Gain(wallet,poolIds) {
     try {
-        const [tokenIds] = await Promise.all(poolIds.map(poolid => QueryTokenByPoolId(wallet,poolid)))
-        // console.log(tokenIds)
-        const tx = await _gain(wallet,tokenIds)
+        const tokenIds = await Promise.all(poolIds.map(poolid => QueryTokenByPoolId(wallet,poolid)))
+        const tokenArray = tokenIds.flatMap(ids => ids)
+        // console.log(tokenArray)
+        const tx = await _gain(wallet,tokenArray)
         console.log(tx)
     } catch (error) {
         console.log(error.message)
@@ -350,29 +351,6 @@ async function input(_wallet,_poolId,_symbol) {
 }
 
 /**
- * End池子
- * @param {ethers.Wallet} _wallet 
- * @param {Number[]} _poolIds 
- */
-async function end(_wallet,_poolIds) {
-    try {
-        const nonce = await _wallet.getTransactionCount()
-        const transactions = _poolIds.map((poolid,index) => ({
-            nonce: nonce+index,
-            to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
-            value: 0,
-            gasLimit: 1500000,
-            data: '0xc964ee9f'+ethers.utils.defaultAbiCoder.encode(['uint256'],[poolid]).substring(2)
-        }))
-        const results = await Promise.all(transactions.map(tx => _wallet.sendTransaction(tx)))
-        const hash = results.map(re => re.hash)
-        console.log(hash)
-    } catch (error) {
-        console.log(error)
-    }
-}
-
-/**
  * all in添加池子 倍数 x2
  * @param {ethers.Wallet} _wallet 
  * @param {Number} _poolId 
@@ -414,7 +392,41 @@ async function AllIn(_wallet,_poolId,_symbol) {
     }
 }
 
-function test() {
-
+/**
+ * End池子
+ * @param {ethers.Wallet} _wallet 
+ * @param {Number[]} _poolIds 
+ */
+async function end(_wallet,_poolIds) {
+    try {
+        const nonce = await _wallet.getTransactionCount()
+        const transactions = _poolIds.map((poolid,index) => ({
+            nonce: nonce+index,
+            to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
+            value: 0,
+            gasLimit: 1500000,
+            data: '0xc964ee9f'+ethers.utils.defaultAbiCoder.encode(['uint256'],[poolid]).substring(2)
+        }))
+        const results = await Promise.all(transactions.map(tx => _wallet.sendTransaction(tx)))
+        const hash = results.map(re => re.hash)
+        console.log(hash)
+    } catch (error) {
+        console.log(error)
+    }
 }
-balanceOf()
+
+function test() {
+    console.log(wallet1.address)
+}
+// balanceOf()
+// Approve()
+// QueryTokenByPoolId(wallet1,28851)
+// Withdraw(wallet1,45256)
+// input(wallet1,11921,'link')
+// (async() => {
+//     const array = [24511]
+//     await Gain(wallet3,array)
+// })()
+AllIn(wallet3,27250,'doge')
+// Gain(wallet3,[23572,6324,45672,45347])
+// end(wallet3,[45672])
