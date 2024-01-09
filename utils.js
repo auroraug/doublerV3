@@ -19,8 +19,8 @@ async function Withdraw(wallet,poolId) {
     try {
         const tokenIds = await QueryTokenByPoolId(wallet,poolId)
         // console.log(tokenIds)
-        const tx = await Promise.all(tokenIds.map(token => _withdraw(wallet,token)))
-        console.log(tx)
+        const txhash = await _withdraw(wallet,tokenIds)
+        console.log(txhash)
     } catch (error) {
         console.log(error.message)
     }
@@ -169,20 +169,26 @@ async function executeApprove(wallet,tokens) {
 /**
  * 
  * @param {ethers.Wallet} wallet 钱包实例
- * @param {Number} token 加入池子时的tokenId
- * @returns {String} tx.hash
+ * @param {Number[]} tokens 加入池子时的tokenId
+ * @returns {Promise<String[]>} tx.hash
  */
-async function _withdraw(wallet,token) {
+async function _withdraw(wallet,tokens) {
     try {
-        const calldata = '0x0fcc56f7'+ ethers.utils.defaultAbiCoder.encode(['uint256'],[token]).substring(2)
-        const tx = {
-            to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
-            gasLimit: 1500000,
-            value: 0,
-            data: calldata
+        const nonce = await wallet.getTransactionCount()
+        const transactions = []
+        for (let index = 0; index < tokens.length; index++) {
+            const calldata = '0x0fcc56f7'+ ethers.utils.defaultAbiCoder.encode(['uint256'],[tokens[index]]).substring(2)
+            const tx = {
+                nonce: nonce+index,
+                to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
+                gasLimit: 1500000,
+                value: 0,
+                data: calldata
+            }
+            transactions.push(tx)
         }
-        const res = await wallet.sendTransaction(tx)
-        return res.hash
+        const results = await Promise.all(transactions.map(tx => wallet.sendTransaction(tx)))
+        return results.map(res => res.hash)
     } catch (error) {
         console.log(error.message)
     }
@@ -380,8 +386,7 @@ async function AllIn(_wallet,_poolId,_symbol) {
     try {
         const params = await fetch(_poolId,contractAddr)
         const balance = (await _checkBalance(_wallet))[_symbol]
-        console.log(parseFloat(params.UnitSize),balance)
-        console.log(parseInt(params.Layer))
+        console.log(`unitSize: ${parseFloat(params.UnitSize)}`,`${_symbol} balance: ${balance}`,`Pool Layer: ${parseInt(params.Layer)}`)
         // console.log(parseInt(_poolId))
         // console.log(BigInt(params.UnitSize*1e18))
         if (parseFloat(params.UnitSize) < balance) {
@@ -443,12 +448,12 @@ async function test() {
 // QueryTokenByPoolId(wallet1,28851)
 // Withdraw(wallet2,14265)
 // input(wallet1,11921,'link')
-(async() => {
-    // const array = [9964,27410,45298]
-    await Withdraw(wallet2,8579)
-})()
-// 14437 15028
-// AllIn(wallet1,37862,'link')
+// (async() => {
+//     // const array = [9964,27410,45298]
+//     await Withdraw(wallet3,8579)
+// })()
+
+AllIn(wallet3,41972,'link')
 
 // Gain(wallet1,[45714])
 // end(wallet3,[45672])
