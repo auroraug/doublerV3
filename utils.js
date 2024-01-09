@@ -18,6 +18,7 @@ const wallet3 = new ethers.Wallet(Private_Key3, provider)
 async function Withdraw(wallet,poolId) {
     try {
         const tokenIds = await QueryTokenByPoolId(wallet,poolId)
+        // console.log(tokenIds)
         const tx = await Promise.all(tokenIds.map(token => _withdraw(wallet,token)))
         console.log(tx)
     } catch (error) {
@@ -222,7 +223,7 @@ async function _gain(wallet,tokens) {
  * @returns {Promise<Number[]>}
  */
 async function QueryTokenByPoolId(_wallet,_poolid) {
-    const filter = {
+    const inPoolFilter = {
         address: '0x0bcb9ea12d0b02d846fb8bbb8763ec8efecb4c79',
         topics: [
             '0xb9fa1caa1e1541788a4b5cd68270e6d375e3a28f4f94017af9351c5955d58fa7',
@@ -233,8 +234,22 @@ async function QueryTokenByPoolId(_wallet,_poolid) {
         fromBlock: 4840285,
         toBlock: 'latest'
     }
-    const data = await provider.getLogs(filter)
-    return data.map(log => parseInt(log.topics[1],16))
+    const forceWithdrawFilter = {
+        address: '0x4820416cf02094ac6b9c253f64777516713330f4',
+        topics: [
+            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+            ethers.utils.hexZeroPad(_wallet.address,32),
+            ethers.utils.hexZeroPad(0,32),
+            null
+        ],
+        fromBlock: 4840285,
+        toBlock: 'latest'
+    }
+    const inPoolData= await provider.getLogs(inPoolFilter)
+    const forceWithdrawData = await provider.getLogs(forceWithdrawFilter)
+    const inPoolResult = inPoolData.map(log => parseInt(log.topics[1],16))
+    const forceWithdrawResult = new Set([...forceWithdrawData.map(log => parseInt(log.topics[3],16))])
+    return inPoolResult.filter(t => !forceWithdrawResult.has(t))
     // const result = await Promise.all(data.map(log => gain(_wallet,parseInt(log.topics[1],16))))
     // console.log(result)
 }
@@ -356,6 +371,9 @@ async function input(_wallet,_poolId,_symbol) {
  * @param {Number} _poolId 
  * @param {String} _symbol
  * @example AllIn(wallet1, 28299, 'okb') 
+ * 在 JavaScript 中，浮点数的表示是有限的，并且在处理非常大的浮点数时可能会遇到精度问题，
+ * 例如128.52 * 1e18 导致结果为128520000000000020000，
+ * 因此需要bignumber.js工具：new BigNumber(value: 128.52).times(1e18)，结果为128520000000000000000
  */
 async function AllIn(_wallet,_poolId,_symbol) {
     const contractAddr = queryTokenAddr(_symbol)
@@ -363,20 +381,21 @@ async function AllIn(_wallet,_poolId,_symbol) {
         const params = await fetch(_poolId,contractAddr)
         const balance = (await _checkBalance(_wallet))[_symbol]
         console.log(parseFloat(params.UnitSize),balance)
-        // console.log(parseInt(params.Layer))
+        console.log(parseInt(params.Layer))
         // console.log(parseInt(_poolId))
         // console.log(BigInt(params.UnitSize*1e18))
         if (parseFloat(params.UnitSize) < balance) {
             console.log(parseFloat(parseInt(balance/parseFloat(params.UnitSize)))*parseFloat(params.UnitSize))
-            const amount = parseFloat(parseInt(balance/parseFloat(params.UnitSize)))*parseFloat(params.UnitSize)*1e18
+            const amount = new BigNumber(parseFloat(parseInt(balance/parseFloat(params.UnitSize)))*parseFloat(params.UnitSize)).times(1e18)
             // const calldata = ethers.utils.defaultAbiCoder.encode(['uint256','uint256','uint256','uint256','uint256','uint256'],
-            // [parseInt(params.Layer),parseInt(_poolId),BigInt(amount*1e18),2,BigInt(2*amount*1e18),0])
+            // [parseInt(params.Layer),parseInt(_poolId),BigInt(amount),2,BigInt(2*amount),0])
             const calldata1 = `${ethers.utils.hexZeroPad(parseInt(params.Layer),32).substring(2)}`+
                 `${ethers.utils.hexZeroPad(parseInt(_poolId),32).substring(2)}`+
                 `${ethers.utils.hexZeroPad(`0x${new BigNumber(amount).toString(16)}`,32).substring(2)}`+
                 `${ethers.utils.hexZeroPad(2,32).substring(2)}`+
                 `${ethers.utils.hexZeroPad(`0x${new BigNumber(2*amount).toString(16)}`,32).substring(2)}`+
                 `${ethers.utils.hexZeroPad(0,32).substring(2)}`
+            // console.log(amount)
             // console.log(calldata1)
             const tx = {
                 to: '0x0BCB9ea12d0b02d846fB8bBB8763Ec8Efecb4c79',
@@ -415,18 +434,21 @@ async function end(_wallet,_poolIds) {
     }
 }
 
-function test() {
-    console.log(wallet1.address)
+async function test() {
+    // const status = await wallet1.getTransaction('0xa3544fc73e732f804654bbb7c510bfc62be3cc26242734b682db026bfab9ecbb')
+    // console.log(status)
 }
 // balanceOf()
 // Approve()
 // QueryTokenByPoolId(wallet1,28851)
-// Withdraw(wallet1,45256)
+// Withdraw(wallet2,14265)
 // input(wallet1,11921,'link')
-// (async() => {
-//     const array = [24511]
-//     await Gain(wallet3,array)
-// })()
-AllIn(wallet3,27250,'doge')
-// Gain(wallet3,[23572,6324,45672,45347])
+(async() => {
+    // const array = [9964,27410,45298]
+    await Withdraw(wallet2,8579)
+})()
+// 14437 15028
+// AllIn(wallet1,37862,'link')
+
+// Gain(wallet1,[45714])
 // end(wallet3,[45672])
